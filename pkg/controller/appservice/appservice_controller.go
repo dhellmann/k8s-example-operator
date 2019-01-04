@@ -2,6 +2,7 @@ package appservice
 
 import (
 	"context"
+	"fmt"
 
 	appv1alpha1 "github.com/dhellmann/k8s-example-operator/pkg/apis/app/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -34,11 +35,13 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+	log.Info("newReconciler")
 	return &ReconcileAppService{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
+	log.Info("add")
 	// Create a new controller
 	c, err := controller.New("appservice-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -93,9 +96,11 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
+			reqLogger.Info("Request object not found")
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Info("Error reading the object, requeuing")
 		return reconcile.Result{}, err
 	}
 
@@ -104,6 +109,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 
 	// Set AppService instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+		reqLogger.Info("Could not set AppService as owner of new pod")
 		return reconcile.Result{}, err
 	}
 
@@ -120,6 +126,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		// Pod created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
+		reqLogger.Info(fmt.Sprintf("failed to check for existing pod: %v", err))
 		return reconcile.Result{}, err
 	}
 
