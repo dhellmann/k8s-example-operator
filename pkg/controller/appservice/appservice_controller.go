@@ -108,8 +108,6 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	reqLogger.Info(fmt.Sprintf("size = %d", instance.Spec.Size))
-
 	// Define a new Pod object
 	pod := newPodForCR(instance)
 
@@ -149,6 +147,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	size := instance.Spec.Size
 	if *found.Spec.Replicas != size {
 		found.Spec.Replicas = &size
+		reqLogger.Info("updating deployment spec", "size", size)
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
 			reqLogger.Error(err, "failed to update Deployment",
@@ -173,7 +172,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 	podNames := getPodNames(podList.Items)
-	reqLogger.Info("got pod names %v", podNames)
+	reqLogger.Info("got pod names", "podNames", podNames)
 
 	// Update status.Nodes if needed
 	if !reflect.DeepEqual(podNames, instance.Status.Nodes) {
@@ -184,6 +183,14 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, err
 		}
 		reqLogger.Info("updated status")
+	}
+
+	// If the list of pods we got is different than the number
+	// expected the deployment is out of date and we should try to
+	// update oureslves again
+	if len(podNames) != int(size) {
+		reqLogger.Info(fmt.Sprintf("found %d pods instead of %d; rescheduling to wait for deployment to update pods", len(podNames), size))
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Pod already exists - don't requeue
