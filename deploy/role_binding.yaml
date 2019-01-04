@@ -2,9 +2,12 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: k8s-example-operator
+  namespace: myproject
 subjects:
 - kind: ServiceAccount
   name: k8s-example-operator
+- kind: User
+  name: developer
 roleRef:
   kind: Role
   name: k8s-example-operator
