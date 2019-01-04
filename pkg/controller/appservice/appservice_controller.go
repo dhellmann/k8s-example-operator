@@ -3,10 +3,14 @@ package appservice
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	appv1alpha1 "github.com/dhellmann/k8s-example-operator/pkg/apis/app/v1alpha1"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -115,37 +119,127 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	found := &appsv1.Deployment{}
+	err = r.client.Get(context.TODO(),
+		types.NamespacedName{Name: instance.Name,
+			Namespace: instance.Namespace},
+		found)
 	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
+		// Define a new deployment
+		dep := r.createDeployment(instance)
+		reqLogger.Info("Creating a new Deployment",
+			"Deployment.Namespace", dep.Namespace,
+			"Deployment.Name", dep.Name)
+		err = r.client.Create(context.TODO(), dep)
 		if err != nil {
+			reqLogger.Error(err, "failed to create new Deployment",
+				"Deployment.Namespace", dep.Namespace,
+				"Deployment.Name", dep.Name)
 			return reconcile.Result{}, err
 		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
+		// Deployment created successfully - return and requeue
+		reqLogger.Info("new deployment created; requeueing")
+		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
-		reqLogger.Info(fmt.Sprintf("failed to check for existing pod: %v", err))
+		reqLogger.Error(err, "failed to get Deployment")
 		return reconcile.Result{}, err
 	}
 
-	// Store the Pod name
-	if instance.Status.Pod != pod.Name {
-		reqLogger.Info("Updating AppService status")
-		instance.Status.Pod = pod.Name
-		err := r.client.Status().Update(context.TODO(), instance)
+	// Ensure the deployment size is the same as the spec
+	size := instance.Spec.Size
+	if *found.Spec.Replicas != size {
+		found.Spec.Replicas = &size
+		err = r.client.Update(context.TODO(), found)
 		if err != nil {
-			reqLogger.Error(err, "failed to update AppService status")
+			reqLogger.Error(err, "failed to update Deployment",
+				"Deployment.Namespace", found.Namespace,
+				"Deployment.Name", found.Name)
 			return reconcile.Result{}, err
 		}
+		// Spec updated - return and requeue
+		reqLogger.Info("updated deployment spec for size change; requeueing")
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// Update the status with the pod names
+	// List the pods for this instance's deployment
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(labelsForApp(instance.Name))
+	listOps := &client.ListOptions{Namespace: instance.Namespace, LabelSelector: labelSelector}
+	err = r.client.List(context.TODO(), listOps, podList)
+	if err != nil {
+		reqLogger.Error(err, "failed to list pods", "AppService.Namespace",
+			instance.Namespace, "AppService.Name", instance.Name)
+		return reconcile.Result{}, err
+	}
+	podNames := getPodNames(podList.Items)
+	reqLogger.Info("got pod names %v", podNames)
+
+	// Update status.Nodes if needed
+	if !reflect.DeepEqual(podNames, instance.Status.Nodes) {
+		instance.Status.Nodes = podNames
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "failed to update Memcached status")
+			return reconcile.Result{}, err
+		}
+		reqLogger.Info("updated status")
 	}
 
 	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+	reqLogger.Info("No more reconcile work to do")
 	return reconcile.Result{}, nil
+}
+
+// createDeployment returns a memcached Deployment object
+func (r *ReconcileAppService) createDeployment(a *appv1alpha1.AppService) *appsv1.Deployment {
+	ls := labelsForApp(a.Name)
+	replicas := a.Spec.Size
+
+	dep := &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      a.Name,
+			Namespace: a.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: ls,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:    "busybox",
+						Image:   "busybox",
+						Command: []string{"sleep", "3600"},
+						// Image:   "memcached:1.4.36-alpine",
+						// Name:    "memcached",
+						// Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: 11211,
+							Name:          "demoapp",
+						}},
+					}},
+				},
+			},
+		},
+	}
+	// Set instance as the owner and controller
+	controllerutil.SetControllerReference(a, dep, r.scheme)
+	return dep
+}
+
+// labelsForApp returns the labels for selecting the resources
+// belonging to the given AppService CR name.
+func labelsForApp(name string) map[string]string {
+	return map[string]string{"appservice": "demo-app", "appservice_cr": name}
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
@@ -169,4 +263,12 @@ func newPodForCR(cr *appv1alpha1.AppService) *corev1.Pod {
 			},
 		},
 	}
+}
+// getPodNames returns the pod names of the array of pods passed in
+func getPodNames(pods []corev1.Pod) []string {
+	var podNames []string
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
+	}
+	return podNames
 }
