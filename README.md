@@ -26,4 +26,4 @@
 
 5. Create the CR
 
-    oc create -f deploy/crds/app_v1alpha1_appservice_cr.yaml
+    oc apply -f deploy/crds/app_v1alpha1_appservice_cr.yaml

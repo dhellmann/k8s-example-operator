@@ -104,6 +104,8 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	reqLogger.Info(fmt.Sprintf("size = %d", instance.Spec.Size))
+
 	// Define a new Pod object
 	pod := newPodForCR(instance)
 
@@ -128,6 +130,17 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	} else if err != nil {
 		reqLogger.Info(fmt.Sprintf("failed to check for existing pod: %v", err))
 		return reconcile.Result{}, err
+	}
+
+	// Store the Pod name
+	if instance.Status.Pod != pod.Name {
+		reqLogger.Info("Updating AppService status")
+		instance.Status.Pod = pod.Name
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "failed to update AppService status")
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Pod already exists - don't requeue
