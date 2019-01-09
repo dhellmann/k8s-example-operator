@@ -117,6 +117,56 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	// Handle deletes
+
+	// If object hasn't been deleted and doesn't have a finalizer, add one
+	// Add a finalizer to newly created objects.
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() &&
+		!stringInList(instance.ObjectMeta.Finalizers, appv1alpha1.AppServiceFinalizer) {
+		reqLogger.Info(
+			"adding finalizer",
+			"existingFinalizers", instance.ObjectMeta.Finalizers,
+			"newValue", appv1alpha1.AppServiceFinalizer,
+		)
+		instance.Finalizers = append(instance.Finalizers,
+			appv1alpha1.AppServiceFinalizer)
+		err := r.client.Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Info(
+				"failed to add finalizer to AppService object due to error",
+				"error", err)
+			return reconcile.Result{}, err
+		}
+	}
+
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		reqLogger.Info(
+			"marked to be deleted",
+			"timestamp", instance.ObjectMeta.DeletionTimestamp,
+		)
+		// no-op if finalizer has been removed.
+		if !stringInList(instance.ObjectMeta.Finalizers, appv1alpha1.AppServiceFinalizer) {
+			reqLogger.Info("reconciling AppService object causes a no-op as there is no finalizer")
+			return reconcile.Result{}, nil
+		}
+
+		// Here is where we would do something with external resources
+		// not managed through CRs (those are deleted automatically).
+
+		// Remove finalizer to allow deletion
+		reqLogger.Info("removing finalizer")
+		instance.ObjectMeta.Finalizers = filterStringFromList(
+			instance.ObjectMeta.Finalizers, appv1alpha1.AppServiceFinalizer)
+		if err := r.client.Update(context.Background(), instance); err != nil {
+			reqLogger.Info("Error removing finalizer from AppService object")
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, nil // done
+
+	}
+
+	// Handle creates/updates
+
 	found := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(),
 		types.NamespacedName{Name: instance.Name,
@@ -278,4 +328,22 @@ func getPodNames(pods []corev1.Pod) []string {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
+}
+
+func stringInList(list []string, strToSearch string) bool {
+	for _, item := range list {
+		if item == strToSearch {
+			return true
+		}
+	}
+	return false
+}
+
+func filterStringFromList(list []string, strToFilter string) (newList []string) {
+	for _, item := range list {
+		if item != strToFilter {
+			newList = append(newList, item)
+		}
+	}
+	return
 }
