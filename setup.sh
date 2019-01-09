@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/sh -xe
 
 cd ~/go/src/github.com/dhellmann/k8s-example-operator
 oc --as system:admin apply -f deploy/service_account.yaml
