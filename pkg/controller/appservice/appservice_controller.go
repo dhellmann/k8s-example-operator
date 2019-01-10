@@ -201,26 +201,9 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Ensure the deployment labels include all of the ones
-	// given as part of the spec
-	var changedDeployment bool
-	if instance.Spec.DeploymentLabels != nil && deployment.ObjectMeta.Labels == nil {
-		reqLogger.Info("allocating new labels map")
-		deployment.ObjectMeta.Labels = map[string]string{}
-	} else {
-		reqLogger.Info("found existing label map",
-			"labels", deployment.ObjectMeta.Labels)
-	}
-	for key, value := range instance.Spec.DeploymentLabels {
-		if deployment.ObjectMeta.Labels[key] != value {
-			reqLogger.Info("updating deployment label",
-				"key", key, "oldValue", deployment.ObjectMeta.Labels[key],
-				"newValue", value)
-			deployment.ObjectMeta.Labels[key] = value
-			changedDeployment = true
-		}
-	}
-	if changedDeployment {
+	// Ensure the deployment labels match the desired values.
+	if !labels.Equals(instance.Spec.DeploymentLabels, deployment.ObjectMeta.Labels) {
+		deployment.ObjectMeta.Labels = instance.Spec.DeploymentLabels
 		reqLogger.Info("updating deployment labels")
 		err = r.client.Update(context.TODO(), deployment)
 		if err != nil {
@@ -275,10 +258,6 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 // createDeployment returns a memcached Deployment object
 func (r *ReconcileAppService) createDeployment(a *appv1alpha1.AppService) *appsv1.Deployment {
 	ls := labelsForApp(a.Name)
-	// Add the labels we're given as well as the automatic ones
-	for key, value := range a.Spec.DeploymentLabels {
-		ls[key] = value
-	}
 	replicas := a.Spec.Size
 
 	dep := &appsv1.Deployment{
