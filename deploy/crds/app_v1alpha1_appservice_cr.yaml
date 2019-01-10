@@ -5,3 +5,7 @@ metadata:
 spec:
   # Add fields here
   size: 3
+  deploymentLabels:
+    test: testValue
+    key2: another-value
+    key3: changed-key3

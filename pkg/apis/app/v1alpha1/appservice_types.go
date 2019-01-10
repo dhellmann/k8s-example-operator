@@ -14,6 +14,7 @@ type AppServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	Size int32 `json:"size"`
+	DeploymentLabels map[string]string `json:"deploymentLabels"`
 }
 
 // AppServiceStatus defines the observed state of AppService
