@@ -108,14 +108,6 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set AppService instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		reqLogger.Info("Could not set AppService as owner of new pod")
-		return reconcile.Result{}, err
-	}
 
 	// Handle deletes
 
