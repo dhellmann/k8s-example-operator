@@ -158,11 +158,11 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 
 	// Handle creates/updates
 
-	found := &appsv1.Deployment{}
+	deployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(),
 		types.NamespacedName{Name: instance.Name,
 			Namespace: instance.Namespace},
-		found)
+		deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
 		dep := r.createDeployment(instance)
@@ -186,14 +186,14 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 
 	// Ensure the deployment size is the same as the spec
 	size := instance.Spec.Size
-	if *found.Spec.Replicas != size {
+	if *deployment.Spec.Replicas != size {
 		reqLogger.Info("updating deployment spec", "size", size)
-		found.Spec.Replicas = &size
-		err = r.client.Update(context.TODO(), found)
+		deployment.Spec.Replicas = &size
+		err = r.client.Update(context.TODO(), deployment)
 		if err != nil {
 			reqLogger.Error(err, "failed to update Deployment",
-				"Deployment.Namespace", found.Namespace,
-				"Deployment.Name", found.Name)
+				"Deployment.Namespace", deployment.Namespace,
+				"Deployment.Name", deployment.Name)
 			return reconcile.Result{}, err
 		}
 		// Spec updated - return and requeue
@@ -204,29 +204,29 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	// Ensure the deployment labels include all of the ones
 	// given as part of the spec
 	var changedDeployment bool
-	if instance.Spec.DeploymentLabels != nil && found.ObjectMeta.Labels == nil {
+	if instance.Spec.DeploymentLabels != nil && deployment.ObjectMeta.Labels == nil {
 		reqLogger.Info("allocating new labels map")
-		found.ObjectMeta.Labels = map[string]string{}
+		deployment.ObjectMeta.Labels = map[string]string{}
 	} else {
 		reqLogger.Info("found existing label map",
-			"labels", found.ObjectMeta.Labels)
+			"labels", deployment.ObjectMeta.Labels)
 	}
 	for key, value := range instance.Spec.DeploymentLabels {
-		if found.ObjectMeta.Labels[key] != value {
+		if deployment.ObjectMeta.Labels[key] != value {
 			reqLogger.Info("updating deployment label",
-				"key", key, "oldValue", found.ObjectMeta.Labels[key],
+				"key", key, "oldValue", deployment.ObjectMeta.Labels[key],
 				"newValue", value)
-			found.ObjectMeta.Labels[key] = value
+			deployment.ObjectMeta.Labels[key] = value
 			changedDeployment = true
 		}
 	}
 	if changedDeployment {
 		reqLogger.Info("updating deployment labels")
-		err = r.client.Update(context.TODO(), found)
+		err = r.client.Update(context.TODO(), deployment)
 		if err != nil {
 			reqLogger.Error(err, "failed to update Deployment",
-				"Deployment.Namespace", found.Namespace,
-				"Deployment.Name", found.Name)
+				"Deployment.Namespace", deployment.Namespace,
+				"Deployment.Name", deployment.Name)
 			return reconcile.Result{}, err
 		}
 		// Spec updated - return and requeue
