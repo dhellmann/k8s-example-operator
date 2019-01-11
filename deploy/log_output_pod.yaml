@@ -1,0 +1,17 @@
+#
+# To launch:
+# oc apply -f deploy/log_output_pod.yaml
+#
+# After launching, run:
+# oc logs log-output-demo
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-output-demo
+spec:
+  containers:
+    - name: log-output-demo-ctr
+      image: busybox
+      command: ["watch", "-n", "10", "ls", "-l"]
