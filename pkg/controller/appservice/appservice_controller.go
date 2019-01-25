@@ -197,7 +197,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, err
 		}
 		// Spec updated - return and requeue
-		reqLogger.Info("updated deployment spepc; requeuing")
+		reqLogger.Info("updated deployment spec; requeuing")
 		return reconcile.Result{Requeue: true}, nil
 	}
 
