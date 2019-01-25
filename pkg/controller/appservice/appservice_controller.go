@@ -10,8 +10,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -252,7 +252,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 			"actual", len(podNames),
 			"after", time.Second*10,
 		)
-		return reconcile.Result{RequeueAfter: time.Second*10}, nil
+		return reconcile.Result{RequeueAfter: time.Second * 10}, nil
 	}
 
 	// Pod already exists - don't requeue
@@ -333,6 +333,7 @@ func newPodForCR(cr *appv1alpha1.AppService) *corev1.Pod {
 		},
 	}
 }
+
 // getPodNames returns the pod names of the array of pods passed in
 func getPodNames(pods []corev1.Pod) []string {
 	var podNames []string
