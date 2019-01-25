@@ -2,8 +2,8 @@ package appservice
 
 import (
 	"context"
-	"fmt"
 	"reflect"
+	"time"
 
 	appv1alpha1 "github.com/dhellmann/k8s-example-operator/pkg/apis/app/v1alpha1"
 
@@ -246,8 +246,13 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	// expected the deployment is out of date and we should try to
 	// update oureslves again
 	if len(podNames) != int(size) {
-		reqLogger.Info(fmt.Sprintf("found %d pods instead of %d; rescheduling to wait for deployment to update pods", len(podNames), size))
-		return reconcile.Result{Requeue: true}, nil
+		reqLogger.Info(
+			"pod list does not match expected size, waiting for changes to settle",
+			"expecting", size,
+			"actual", len(podNames),
+			"after", time.Second*10,
+		)
+		return reconcile.Result{RequeueAfter: time.Second*10}, nil
 	}
 
 	// Pod already exists - don't requeue
